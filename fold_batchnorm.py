@@ -22,6 +22,10 @@ def ParseArgs():
              'folded into a single scale layer')
     parser.add_argument('--model_weights_folded', type=str, 
         help='Output model weights with batch norm and scale layers folded together.')
+    parser.add_argument('--lr_mult', type=float, default=1.0,
+        help='Learning rate multipler of the new, folded scale layer')
+    parser.add_argument('--decay_mult', type=float, default=1.0,
+        help='Weight decay multipler of the new, folded scale layer')
 
     args = parser.parse_args()
     return args
@@ -56,11 +60,13 @@ def FindBatchNormLayers(network):
     return batch_norm_keys
 
 
-def DerefBatchNormLayers(network, batch_norm_names, layers_dict, suffix='_fold'):
+def DerefBatchNormLayers(network, batch_norm_names, layers_dict, suffix='_fold', 
+                         lr_mult=1.0, decay_mult=1.0):
     """For all batch norm layers, effectively remove them.
        Sets the bottom blob of the layer following batch norm to the top blob of 
        the layer before the batch norm layer.
        This effectively removes the batch norm layer from the graph.
+       Also have the option of setting the learning rate multiplier of the new, folded scale layer.
        
        Note that one blob can be referenced by multiple layers, especially 
        in the case of in-place layers. To get around this, we just test to see
@@ -94,6 +100,11 @@ def DerefBatchNormLayers(network, batch_norm_names, layers_dict, suffix='_fold')
         
         next_layer.bottom[0] = prev_layer.top[0]
         next_layer.name = next_layer.name + suffix
+
+        if lr_mult != 1.0 or decay_mult != 1.0:
+            for i in range(len(next_layer.param)):
+                next_layer.param[i].lr_mult = lr_mult
+                next_layer.param[i].decay_mult = decay_mult
 
 
 def RemoveBatchNormLayers(network, batch_norm_names):
@@ -149,7 +160,8 @@ def main():
     layers_dict = LayersToDict(network_def)
     batch_norm_names = FindBatchNormLayers(network_def)
     
-    DerefBatchNormLayers(network_def, batch_norm_names, layers_dict)
+    DerefBatchNormLayers(network_def, batch_norm_names, layers_dict, 
+                         lr_mult=args.lr_mult, decay_mult=args.decay_mult)
     RemoveBatchNormLayers(network_def, batch_norm_names)
 
     with open(args.model_def_folded, 'w') as f:
