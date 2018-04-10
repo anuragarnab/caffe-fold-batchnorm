@@ -67,6 +67,7 @@ def DerefBatchNormLayers(network, batch_norm_names, layers_dict, suffix='_fold',
        the layer before the batch norm layer.
        This effectively removes the batch norm layer from the graph.
        Also have the option of setting the learning rate multiplier of the new, folded scale layer.
+       The multiplier adjustment assumes that there are exactly two parameters in the scale layer
        
        Note that one blob can be referenced by multiple layers, especially 
        in the case of in-place layers. To get around this, we just test to see
@@ -102,6 +103,8 @@ def DerefBatchNormLayers(network, batch_norm_names, layers_dict, suffix='_fold',
         next_layer.name = next_layer.name + suffix
 
         if lr_mult != 1.0 or decay_mult != 1.0:
+            while len(next_layer.param) < 2:
+                next_layer.param.add()
             for i in range(len(next_layer.param)):
                 next_layer.param[i].lr_mult = lr_mult
                 next_layer.param[i].decay_mult = decay_mult
